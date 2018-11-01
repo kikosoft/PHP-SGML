@@ -14,7 +14,8 @@
 
 interface interface_SGML
 {
-  public function __construct($name,$content = '',$isVoid = FALSE);
+  public function processArguments($arguments);
+  public function __construct($name,$arguments = NULL,$isVoid = FALSE);
   public function minimize();
   public function block();
   public function unblock();
@@ -45,7 +46,7 @@ class SGML implements interface_SGML
   private $attributes   = [];     // key is attribute name, value is attribute value
 
 
-  private function _processArguments($arguments)
+  public function processArguments($arguments)
   // split arguments into content and attributes
   {
     // start with nothing
@@ -79,7 +80,7 @@ class SGML implements interface_SGML
   // create an element with a name and optionally some content
   {
     // split arguments into content and attributes
-    list($content,$attributes) = $this->_processArguments($arguments);
+    list($content,$attributes) = $this->processArguments($arguments);
     // the element name is always lower case
     $this->name    = $name;
     $this->content = $content;
@@ -203,7 +204,7 @@ class SGML implements interface_SGML
   {
     // split arguments into content and attributes
     $arguments = isset($arguments[0]) ? $arguments[0] : NULL;
-    list($content,$attributes) = $this->_processArguments($arguments);
+    list($content,$attributes) = $this->processArguments($arguments);
     // make new element
     $element = $this->_attachNew($name,$content);
     // attach attributes
@@ -265,14 +266,14 @@ class SGML implements interface_SGML
     // no start when it has already been flushed
     if ($this->startFlushed) return '';
     // first the name of this element
-    $content = $this->name;
+    $text = $this->name;
     // then the list of attributes
     foreach ($this->attributes as $attribute => $value)
     {
-      $content .= ' '.(($value == '') ? $attribute : $attribute.'="'.addslashes($value).'"');
+      $text .= ' '.(($value == '') ? $attribute : $attribute.'="'.addslashes($value).'"');
     }
     // and return it as a tag
-    return '<'.$content.'>';
+    return '<'.$text.'>';
   }
 
 
@@ -312,7 +313,10 @@ class SGML implements interface_SGML
       // end tag
       $sgml .= ($innerMinimize ? '' : $indent).$this->_endTag();
     }
-    else $sgml = ''; // no name, no elements
+    // no content and no elements, does it have at least a name?
+    elseif ($this->_hasName()) $sgml = $this->_startTag().$this->_endTag();
+    // no content, no elements and no name
+    else $sgml = '';
     // return sgml
     return $minimize ? $sgml : $indent.$sgml.PHP_EOL;
   }
