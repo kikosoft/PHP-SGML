@@ -22,7 +22,9 @@ $ingredients->ingredient('60ml coconut cream');
 $ingredients->ingredient('wedge of pineapple, to garnish (optional)');
 
 // method of preparation
-$recipe->method('Pulse all the ingredients along with a handful of ice in a blender until smooth. Pour into a tall glass and garnish as you like.');
+$recipe->method(['duration' => '5min',
+                 'content'  => 'Pulse all the ingredients along with a handful of ice in a blender until smooth. Pour into a tall glass and garnish as you like.']);
+
 
 // output with nice layout
 $recipe->flush(FALSE);
@@ -41,7 +43,7 @@ This would output:
     <ingredient>60ml coconut cream</ingredient>
     <ingredient>wedge of pineapple, to garnish (optional)</ingredient>
   </ingredients>
-  <method>Pulse all the ingredients along with a handful of ice in a blender until smooth. Pour into a tall glass and garnish as you like.</method>
+  <method duration="5min">Pulse all the ingredients along with a handful of ice in a blender until smooth. Pour into a tall glass and garnish as you like.</method>
 </recipe>
 ```
 
