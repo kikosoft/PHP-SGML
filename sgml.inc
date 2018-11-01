@@ -47,7 +47,13 @@ class SGML implements interface_SGML
 
 
   public function processArguments($arguments)
-  // split arguments into content and attributes
+  // split arguments into content and attributes. if an argument is a string
+  // then it is content. if arguments is an array then it represents an attributes.
+  // example 1: 'my content'
+  // example 2: ['size' => 5, 'title' => 'test]
+  // example 3: ['my content',['size' => 5, 'title' => 'test]]
+  // example 4: [['size' => 5, 'title' => 'test],'my content']
+  // example 5: [['size' => 5],'my content',['title' => 'test]]
   {
     // start with nothing
     $content    = '';
@@ -55,17 +61,18 @@ class SGML implements interface_SGML
     // any arguments?
     if (isset($arguments))
     {
-      // if it is an array process that
+      // if it is an array then we need to look deeper
       if (is_array($arguments))
+      foreach ($arguments as $key => $value)
       {
-        // these are basically attributes
-        $attributes = $arguments;
-        // unless it is named 'content'
-        if (isset($attributes['content']))
+        // an array is always seens as attributes
+        if (is_array($value)) $attributes += $value;
+        else
         {
-          // extract the content
-          $content = $attributes['content'];
-          unset($attributes['content']);
+          // if the key is numeric it has to be content
+          if (is_numeric($key)) $content .= $value;
+          // otherwize we see it as an attribute
+                         else $this->attribute($key,$value);
         }
       }
       // a non-array is always seen as content
@@ -203,7 +210,6 @@ class SGML implements interface_SGML
   // this magic function creates a new element with any name, content and attributes
   {
     // split arguments into content and attributes
-    $arguments = isset($arguments[0]) ? $arguments[0] : NULL;
     list($content,$attributes) = $this->processArguments($arguments);
     // make new element
     $element = $this->_attachNew($name,$content);
