@@ -3,7 +3,7 @@ Generate valid SGML code with a simple PHP class. This class can be used to buil
 
 A simple PHP example would be:
 
-```
+```ruby
 $recipe = new SGML('recipe',['language' => 'English']);
 $recipe->comment('Taken from https://www.bbcgoodfood.com/recipes/pina-colada')
        ->title('Piña colada');
@@ -19,7 +19,7 @@ $recipe->flush(FALSE);
 
 This would output:
 
-```
+```ruby
 <recipe language="English">
   <!-- Taken from https://www.bbcgoodfood.com/recipes/pina-colada -->
   <title>Piña colada</title>
