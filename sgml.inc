@@ -175,11 +175,11 @@ class SGML implements interface_SGML
   }
 
 
-  private function _new($name,$content = '',$isVoid = FALSE)
+  private function _new($name,$arguments = NULL,$isVoid = FALSE)
   // create a new element with a name and optionally some content
   {
     // return a new element
-    return new SGML($name,$content,$isVoid);
+    return new SGML($name,$arguments,$isVoid);
   }
 
 
@@ -199,24 +199,18 @@ class SGML implements interface_SGML
   }
 
 
-  private function _attachNew($name,$content = '',$isVoid = FALSE)
+  private function _attachNew($name,$arguments = NULL,$isVoid = FALSE)
   // create a new element and attach it to the current
   {
-     return $this->attach($this->_new($name,$content,$isVoid));
+     return $this->attach($this->_new($name,$arguments,$isVoid));
   }
 
 
   public function __call($name,$arguments)
   // this magic function creates a new element with any name, content and attributes
   {
-    // split arguments into content and attributes
-    list($content,$attributes) = $this->processArguments($arguments);
     // make new element
-    $element = $this->_attachNew($name,$content);
-    // attach attributes
-    if (count($attributes) > 0) $element->attributes($attributes);
-    // return element
-    return $element;
+    return $this->_attachNew($name,$arguments);
   }
 
 /***************************************************
