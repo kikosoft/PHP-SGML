@@ -141,7 +141,7 @@ class SGML implements interface_SGML
   }
 
 /***************************************************
- **  content                                         **
+ **  CONTENT                                      **
  ***************************************************/
 
   private function _hasContent()
