@@ -24,8 +24,8 @@ $ingredients->ingredient('wedge of pineapple, to garnish (optional)');
 
 // method of preparation
 $recipe->method(['duration' => '5min',
-                 'content'  => 'Pulse all the ingredients along with a handful of ice in a'.
-                 ' blender until smooth. Pour into a tall glass and garnish as you like.']);
+                 'content'  => 'Pulse all the ingredients along with a handful of ice in a blender'.
+                               ' until smooth. Pour into a tall glass and garnish as you like.']);
 
 
 // output with nice layout
