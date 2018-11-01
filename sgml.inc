@@ -14,15 +14,14 @@
 
 interface interface_SGML
 {
-  public function __construct($name,$text = '',$isVoid = FALSE);
+  public function __construct($name,$content = '',$isVoid = FALSE);
   public function minimize();
   public function block();
   public function unblock();
-  public function write($text);
+  public function write($content);
   public function attach($element);
-  public function setAttrs($attributes);
-  public function setAttr($name,$value);
-  public function appendAttr($name,$value);
+  public function attributes($attributes);
+  public function attribute($name,$value,$append = FALSE);
   public function comment($comment);
   public function getMarkup($minimize = TRUE,$indentLevel = 0);
   public function flush($minimize = TRUE,$handle = NULL);
@@ -41,18 +40,52 @@ class SGML implements interface_SGML
   private $blocked      = FALSE;  // when blocked you cannot flush the end tag
   private $startFlushed = FALSE;  // indicate that the start tag was flushed
   private $name         = '';     // tag name, if absent no tag is outputted, only content
-  private $text         = '';     // is always a string, if present there are no child elements
+  private $content      = '';     // is always a string, if present there are no child elements
   private $elements     = [];     // refers to other sgml elements, if present there is no content
   private $attributes   = [];     // key is attribute name, value is attribute value
 
 
-  public function __construct($name,$text = '',$isVoid = FALSE)
-  // create an element with a name and optionally some text
+  private function _processArguments($arguments)
+  // split arguments into content and attributes
   {
+    // start with nothing
+    $content    = '';
+    $attributes = [];
+    // any arguments?
+    if (isset($arguments))
+    {
+      // if it is an array process that
+      if (is_array($arguments))
+      {
+        // these are basically attributes
+        $attributes = $arguments;
+        // unless it is named 'content'
+        if (isset($attributes['content']))
+        {
+          // extract the content
+          $content = $attributes['content'];
+          unset($attributes['content']);
+        }
+      }
+      // a non-array is always seen as content
+      else $content = $arguments;
+    }
+    // return an array with content and attributes
+    return [$content,$attributes];
+  }
+
+
+  public function __construct($name,$arguments = NULL,$isVoid = FALSE)
+  // create an element with a name and optionally some content
+  {
+    // split arguments into content and attributes
+    list($content,$attributes) = $this->_processArguments($arguments);
     // the element name is always lower case
-    $this->name        = mb_strtolower($name);
-    $this->text        = $text;
-    $this->isVoid = $isVoid;
+    $this->name    = $name;
+    $this->content = $content;
+    $this->isVoid  = $isVoid;
+    // attach attributes
+    if (count($attributes) > 0) $this->attributes($attributes);
     // the constructor always returns the object created
   }
 
@@ -100,25 +133,25 @@ class SGML implements interface_SGML
   }
 
 /***************************************************
- **  TEXT                                         **
+ **  content                                         **
  ***************************************************/
 
-  private function _hasText()
-  // does this element have text?
+  private function _hasContent()
+  // does this element have content?
   {
-    return ($this->text != '');
+    return ($this->content != '');
   }
 
 
-  public function write($text)
-  // add some text to this element
+  public function write($content)
+  // add some content to this element
   {
-    // if elements are present we should add the text as an element
-    if ($this->_hasElements()) $this->_attachNew('',$text);
-    // otherwise we can add it to the existing text
-    elseif ($this->_hasText()) $this->text .= $text;
-    // or make it the new text
-    else $this->text = $text;
+    // if elements are present we should add the content as an element
+    if ($this->_hasElements()) $this->_attachNew('',$content);
+    // otherwise we can add it to the existing content
+    elseif ($this->_hasContent()) $this->content .= $content;
+    // or make it the new content
+    else $this->content = $content;
     // return for chaining
     return $this;
   }
@@ -134,72 +167,78 @@ class SGML implements interface_SGML
   }
 
 
-  private function _new($name,$text = '',$isVoid = FALSE)
-  // create a new element with a name and optionally some text
+  private function _new($name,$content = '',$isVoid = FALSE)
+  // create a new element with a name and optionally some content
   {
     // return a new element
-    return new SGML($name,$text,$isVoid);
+    return new SGML($name,$content,$isVoid);
   }
 
 
   public function attach($element)
   // add a new element to this one
   {
-    // if a text is present we should promote it to an element
-    if ($this->_hasText())
+    // if a content is present we should promote it to an element
+    if ($this->_hasContent())
     {
-      // create a new element with the current text
-      $this->elements[] = new SGML('',$this->text);
-      // and clear the text
-      $this->text = '';
+      // create a new element with the current content
+      $this->elements[] = new SGML('',$this->content);
+      // and clear the content
+      $this->content = '';
     }
     // now we can safely add the new element and return it
     return $this->elements[] = $element;
   }
 
 
-  private function _attachNew($name,$text = '',$isVoid = FALSE)
+  private function _attachNew($name,$content = '',$isVoid = FALSE)
   // create a new element and attach it to the current
   {
-     return $this->attach($this->_new($name,$text,$isVoid));
+     return $this->attach($this->_new($name,$content,$isVoid));
   }
 
+
+  public function __call($name,$arguments)
+  // this magic function creates a new element with any name, content and attributes
+  {
+    // split arguments into content and attributes
+    $arguments = isset($arguments[0]) ? $arguments[0] : NULL;
+    list($content,$attributes) = $this->_processArguments($arguments);
+    // make new element
+    $element = $this->_attachNew($name,$content);
+    // attach attributes
+    if (count($attributes) > 0) $element->attributes($attributes);
+    // return element
+    return $element;
+  }
 
 /***************************************************
  **  ATTRIBUTES                                   **
  ***************************************************/
 
-  private function _getAttr($name)
+  private function _getAttribute($name)
   // returns all one attribute, if it exists, otherwise we return an empty string
   {
-    $name = mb_strtolower($name);
     return isset($this->attributes[$name]) ? $this->attributes[$name] : '';
   }
 
 
-  public function setAttrs($attributes)
+  public function attributes($attributes)
   // set attributes, always supply an associative array of attributes
   {
-    foreach ($attributes as $name => $value) $this->setAttr($name,$value);
+    foreach ($attributes as $name => $value) $this->attribute($name,$value);
     // return for chaining
     return $this;
   }
 
 
-  public function setAttr($name,$value)
+  public function attribute($name,$value,$append = FALSE)
   // set an attribute, overwrite it when it exists
   {
-    $this->attributes[mb_strtolower($name)] = $value;
-    // return for chaining
-    return $this;
-  }
-
-
-  public function appendAttr($name,$value)
-  // append an attribute, appent it when it exists
-  {
-    $name = mb_strtolower($name);
-    $this->attributes[$name] = trim($this->_getAttr($name).' '.$value);
+    // append value to existing value
+    if ($append) $value = trim($this->_getAttribute($name).' '.$value);
+    // assign value
+    $this->attributes[$name] = $value;
     // return for chaining
     return $this;
   }
@@ -209,7 +248,7 @@ class SGML implements interface_SGML
  ***************************************************/
 
   public function comment($comment)
-  // add a comment text, a comment is always an element with the name '--'
+  // add a comment content, a comment is always an element with the name '--'
   {
     $this->_attachNew('--',$comment);
     // return for chaining
@@ -251,17 +290,17 @@ class SGML implements interface_SGML
     $indent = str_repeat('  ',$indentLevel);
     // do we minimize the inside of the element?
     $innerMinimize = $this->minimize || $minimize;
-    // any element with a text should be concatenated
-    if ($this->_hasText())
+    // any element with a content should be concatenated
+    if ($this->_hasContent())
     {
       // does it have an element name?
       if ($this->_hasName())
       {
         // this could be a comment, otherwise it is a normal tag
-        if ($this->name == '--') $sgml = $innerMinimize ? '' : '<!-- '.$this->text.' -->';
-                            else $sgml = $this->_startTag().$this->text.$this->_endTag();
+        if ($this->name == '--') $sgml = $innerMinimize ? '' : '<!-- '.$this->content.' -->';
+                            else $sgml = $this->_startTag().$this->content.$this->_endTag();
       }
-      else $sgml = $this->text; // it's just a text
+      else $sgml = $this->content; // it's just a content
     }
     // otherwise it could have elements and we need to get those
     elseif ($this->_hasElements())
@@ -293,7 +332,7 @@ class SGML implements interface_SGML
     // the start was flushed
     $this->startFlushed = TRUE;
     // cleanup
-    $this->text       = '';
+    $this->content    = '';
     $this->elements   = [];
     $this->attributes = [];
   }
