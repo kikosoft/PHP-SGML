@@ -12,8 +12,8 @@ $recipe->comment('Taken from https://www.bbcgoodfood.com/recipes/pina-colada')
        ->title('Piña colada');
        
 // add a description       
-$recipe->description('A tropical blend of rich coconut cream, white rum and tangy pineapple'.
-                     ' - serve with an umbrella for kitsch appeal');
+$recipe->description('A tropical blend of rich coconut cream, white rum and tangy'.
+                     ' pineapple - serve with an umbrella for kitsch appeal');
 
 // list the ingredients
 $ingredients = $recipe->ingredients();
@@ -24,8 +24,8 @@ $ingredients->ingredient('wedge of pineapple, to garnish (optional)');
 
 // method of preparation
 $recipe->method(['duration' => '5min',
-                 'content'  => 'Pulse all the ingredients along with a handful of ice in a blender until smooth.'.
-                 ' Pour into a tall glass and garnish as you like.']);
+                 'content'  => 'Pulse all the ingredients along with a handful of ice in a'.
+                 ' blender until smooth. Pour into a tall glass and garnish as you like.']);
 
 
 // output with nice layout
