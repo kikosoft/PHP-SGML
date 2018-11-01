@@ -88,7 +88,7 @@ class SGML implements interface_SGML
   {
     // split arguments into content and attributes
     list($content,$attributes) = $this->processArguments($arguments);
-    // the element name is always lower case
+    // store
     $this->name    = $name;
     $this->content = $content;
     $this->isVoid  = $isVoid;
