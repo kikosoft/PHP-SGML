@@ -22,71 +22,47 @@ namespace html5php\html5;
  */
 class SGML
 {
-  /**
-   * Detemine how a void element is closed.
-   * Use '' for html, and ' /' for xml.
-   *
-   * @var string
-   */
+  /** @var string $voidClosure Detemine how a void element is closed. */
   private $voidClosure  = '';
 
-  /**
-   * Whether this element is without a closing tag, like: <br>.
-   *
-   * @var bool
-   */
+  /** @var bool $isVoid Whether this element is without a closing tag, like: <br>. */
   private $isVoid       = FALSE;
 
-  /**
-   * Whether the markup of this element will be minimized.
-   *
-   * @var bool
-   */
+  /** @var bool $minimize Whether the markup of this element will be minimized. */
   private $minimize     = FALSE;
 
-  /**
-   * Whether this element is locked so you cannot flush the end tag.
-   *
-   * @var bool
-   */
+  /** @var bool $blocked Whether this element is locked so you cannot flush the end tag. */
   private $blocked      = FALSE;
 
-  /**
-   * Whether the start tag of this element was flushed.
-   *
-   * @var bool
-   */
+  /** @var bool $startFlushed Whether the start tag of this element was flushed. */
   private $startFlushed = FALSE;
 
   /**
-   * The tag name of this element.
-   * If absent no start or end tag, only content, is send to the output.
+   * If absent only content is send to the output without a start or end tag.
    *
-   * @var string
+   * @var string $name The tag name of this element.
    */
   private $name         = '';
 
   /**
-   * The content of this element, apart from child elements.
-   * If present there are no child elements.
+   * If present there are no child elements. As soon a child element is added
+   * the content has to be transformed into a child element as well.
    *
-   * @var string
+   * @var string $content The content of this element, apart from child elements.
    */
   private $content      = '';
 
   /**
-   * The child elements of this element.
    * If present there is no content.
    *
-   * @var array
+   * @var array $elements The child elements of this element.
    */
   private $elements     = [];
 
   /**
-   * Attributes of this element.
    * The array keys are attribute names, and array values are attribute values.
    *
-   * @var array
+   * @var array $attributes Attributes of this element.
    */
   private $attributes   = [];
 
@@ -99,13 +75,13 @@ class SGML
    * Example 4: [['size' => 5, 'title' => 'test],'my content']
    * Example 5: [['size' => 5],'my content',['title' => 'test],'more content']
    *
-   * @param array $arguments Arguments supplied to a SGML element
+   * @param array|string|null $arguments Arguments supplied to a SGML element
    * @return array|null Array containing content and attributes, or NULL.
    */
-  public function processArguments($arguments)
+  public static function processArguments($arguments)
   {
     // start with no content or attributes
-    $content    = '';
+    $content    = [];
     $attributes = [];
     // any arguments?
     if (isset($arguments))
@@ -118,32 +94,32 @@ class SGML
         else
         {
           // if the key is numeric it has to be content
-          if (is_numeric($key)) $content .= $value;
+          if (is_numeric($key)) $content[] = $value;
           // otherwize we see it as an attribute
-                         else $this->attribute($key,$value);
+                         else $attribute[$key] = $value;
         }
       }
       // a non-array is always seen as content
-      else $content = $arguments;
+      else $content[] = $arguments;
     }
-    return [$content,$attributes];
+    return [implode(' ',$content),$attributes];
   }
 
   /**
    * Create an element with a name and optionally some content.
    *
    * @param string $name
-   * @param array|null $arguments
+   * @param array|string|null $arguments
    */
   public function __construct($name,$arguments = NULL)
   {
     // split arguments into content and attributes
-    list($content,$attributes) = $this->processArguments($arguments);
+    list($content,$attributes) = self::processArguments($arguments);
     // store
     $this->name    = $name;
     $this->content = $content;
     // attach attributes
-    if (count($attributes) > 0) $this->attributes($attributes);
+    if (count($attributes) > 0) $this->setAttributes($attributes);
   }
 
   /**
@@ -249,8 +225,8 @@ class SGML
    * Create a new element with a name and optionally some content.
    *
    * @param string $name
-   * @param array|null $arguments
-   * @return object
+   * @param array|string|null $arguments
+   * @return SGML
    */
   private function _new($name,$arguments = NULL)
   {
@@ -279,10 +255,10 @@ class SGML
   }
 
   /**
-   * Ccreate a new element and attach it to the current.
+   * Create a new element and attach it to the current.
    *
    * @param string $name
-   * @param array|null $arguments
+   * @param array|string|null $arguments
    * @return object
    */
   private function _attachNew($name,$arguments = NULL)
@@ -292,9 +268,10 @@ class SGML
 
   /**
    * This magic function creates a new element with any name, content and attributes.
+   * The usage of __call is controversial but is needed for syntactical purposes.
    *
    * @param string $name
-   * @param array|null $arguments
+   * @param array|string|null $arguments
    * @return object
    */
   public function __call($name,$arguments)
@@ -304,12 +281,12 @@ class SGML
   }
 
   /**
-   * Returns all one attribute, if it exists, otherwise we return an empty string.
+   * Returns one attribute, if it exists, otherwise we return an empty string.
    *
    * @param string $name
    * @return string
    */
-  private function _getAttribute($name)
+  public function getAttribute($name)
   {
     return isset($this->attributes[$name]) ? $this->attributes[$name] : '';
   }
@@ -320,9 +297,9 @@ class SGML
    * @param array|null $attributes
    * @return object
    */
-  public function attributes($attributes)
+  public function setAttributes($attributes)
   {
-    foreach ($attributes as $name => $value) $this->attribute($name,$value);
+    foreach ($attributes as $name => $value) $this->setAttribute($name,$value);
     return $this;
   }
 
@@ -334,12 +311,26 @@ class SGML
    * @param bool $append
    * @return object
    */
-  public function attribute($name,$value,$append = FALSE)
+  public function setAttribute($name,$value,$append = FALSE)
   {
     // append value to existing value
-    if ($append) $value = trim($this->_getAttribute($name).' '.$value);
+    if ($append) $value = trim($this->getAttribute($name).' '.$value);
     // assign value
     $this->attributes[$name] = $value;
+    // return for chaining
+    return $this;
+  }
+
+  /**
+   * Remove an attribute.
+   *
+   * @param string $name
+   * @return object
+   */
+  public function removeAttribute($name)
+  {
+    // remove
+    unset($this->attributes[$name]);
     // return for chaining
     return $this;
   }
@@ -372,7 +363,20 @@ class SGML
     foreach ($this->attributes as $attribute => $value)
     {
       // if the attribute is numeric it is a boolean attributes
-      if (is_numeric($attribute)) $text .= ' '.addslashes($value);
+      if (is_numeric($attribute))
+      {
+if (is_array($value))
+{
+  echo '<pre>';
+  echo "PROBLEM?\n";
+  echo $attribute."\n";
+  print_r($value);
+  debug_print_backtrace();
+  echo '</pre>';
+  die('Bye...');
+}
+        $text .= ' '.addslashes($value);
+      }
       else $text .= ' '.(($value == '') ? $attribute : $attribute.'="'.addslashes($value).'"');
     }
     // and return it as a tag, also sets correct closure
@@ -431,7 +435,6 @@ class SGML
     // return sgml
     return $minimize ? $sgml : $indent.$sgml.PHP_EOL;
   }
-
 
   /**
    * Flush markup to the given file handle.
