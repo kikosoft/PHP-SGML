@@ -124,10 +124,10 @@ class SGML
     // split arguments into content and attributes
     list($content,$attributes) = self::processArguments($arguments);
     // store what we known about this element
-    $this->parent  = $parent;
-    $this->name    = $name;
-    $this->content = $content;
-    $this->setAttributes($attributes);
+    $this->parent     = $parent;
+    $this->name       = $name;
+    $this->content    = $content;
+    $this->attributes = $attributes;
     if (isset($parent))
     {
       // if content is present in the parent we should promote it to an
