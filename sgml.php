@@ -15,8 +15,6 @@
  *            FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-namespace html5php\html5;
-
 /**
  * Low level SGML class.
  */
@@ -36,6 +34,9 @@ class SGML
 
   /** @var bool $startFlushed Whether the start tag of this element was flushed. */
   private $startFlushed = FALSE;
+
+  /** @var object|null $parent Parent element of this element. */
+  private $parent       = NULL;
 
   /**
    * If absent only content is send to the output without a start or end tag.
@@ -87,16 +88,22 @@ class SGML
     if (isset($arguments))
     {
       if (is_array($arguments))
-      foreach ($arguments as $key => $value)
+      foreach ($arguments as $key => $argument)
       {
         // an array is always seens as attributes
-        if (is_array($value)) $attributes += $value;
+        if (is_array($argument))
+        foreach ($argument as $name => $value)
+        {
+          // check for valueless attributes
+          if (is_numeric($name)) $attributes[$value] = '';
+                            else $attributes[$name] = $value;
+        }
         else
         {
           // if the key is numeric it has to be content
-          if (is_numeric($key)) $content[] = $value;
+          if (is_numeric($key)) $content[] = $argument;
           // otherwize we see it as an attribute
-                         else $attribute[$key] = $value;
+          else $attribute[$key] = $argument;
         }
       }
       // a non-array is always seen as content
@@ -108,18 +115,33 @@ class SGML
   /**
    * Create an element with a name and optionally some content.
    *
-   * @param string $name
-   * @param array|string|null $arguments
+   * @param object|null $parent The parent element of this element, or null.
+   * @param string $name Name of the new element.
+   * @param array|string|null $arguments Arguments of the element.
    */
-  public function __construct($name,$arguments = NULL)
+  public function __construct($parent = NULL,$name = '',$arguments = NULL)
   {
     // split arguments into content and attributes
     list($content,$attributes) = self::processArguments($arguments);
-    // store
+    // store what we known about this element
+    $this->parent  = $parent;
     $this->name    = $name;
     $this->content = $content;
-    // attach attributes
-    if (count($attributes) > 0) $this->setAttributes($attributes);
+    $this->setAttributes($attributes);
+    if (isset($parent))
+    {
+      // if content is present in the parent we should promote it to an
+      // element otherwise we will loose the order of content and elements
+      if ($parent->hasContent())
+      {
+        // create new element for the parent with that content
+        new SGML($parent,'',$parent->getContent());
+        // and clear the content of the parent
+        $parent->clearContent();
+      }
+      // attach this element to the parent
+      $parent->attach($this);
+    }
   }
 
   /**
@@ -178,7 +200,7 @@ class SGML
    *
    * @return bool
    */
-  private function _hasName()
+  public function hasName()
   {
     return ($this->name != '');
   }
@@ -188,7 +210,7 @@ class SGML
    *
    * @return bool
    */
-  private function _hasContent()
+  public function hasContent()
   {
     return ($this->content != '');
   }
@@ -201,10 +223,10 @@ class SGML
    */
   public function write($content)
   {
-    // if elements are present we should add the content as an element
-    if ($this->_hasElements()) $this->_attachNew('',$content);
+    // if elements are present we should add the content as an new element
+    if ($this->hasElements()) new SGML($this,'',$content);
     // otherwise we can add it to the existing content
-    elseif ($this->_hasContent()) $this->content .= $content;
+    elseif ($this->hasContent()) $this->content .= $content;
     // or make it the new content
     else $this->content = $content;
     // return for chaining
@@ -216,59 +238,26 @@ class SGML
    *
    * @return bool
    */
-  private function _hasElements()
+  public function hasElements()
   {
     return count($this->elements) > 0;
   }
 
   /**
-   * Create a new element with a name and optionally some content.
-   *
-   * @param string $name
-   * @param array|string|null $arguments
-   * @return SGML
-   */
-  private function _new($name,$arguments = NULL)
-  {
-    // return a new element
-    return new SGML($name,$arguments);
-  }
-
-  /**
-   * Add a new element to this one.
+   * Attach a new element to this one.
    *
    * @param object $element
    * @return object
    */
   public function attach($element)
   {
-    // if a content is present we should promote it to an element
-    if ($this->_hasContent())
-    {
-      // create a new element with the current content
-      $this->elements[] = $this->_new('',$this->content);
-      // and clear the content
-      $this->content = '';
-    }
-    // now we can safely add the new element and return it
-    return $this->elements[] = $element;
-  }
-
-  /**
-   * Create a new element and attach it to the current.
-   *
-   * @param string $name
-   * @param array|string|null $arguments
-   * @return object
-   */
-  private function _attachNew($name,$arguments = NULL)
-  {
-     return $this->attach($this->_new($name,$arguments));
+    $this->elements[] = $element;
+    return $this;
   }
 
   /**
    * This magic function creates a new element with any name, content and attributes.
-   * The usage of __call is controversial but is needed for syntactical purposes.
+   * The usage of __call is controversial but is needed here to reduce code bloat.
    *
    * @param string $name
    * @param array|string|null $arguments
@@ -277,7 +266,17 @@ class SGML
   public function __call($name,$arguments)
   {
     // make new element
-    return $this->_attachNew($name,$arguments);
+    return new SGML($this,$name,$arguments);
+  }
+
+  /**
+   * Returns the parent of this element or null it no parent exists.
+   *
+   * @return object|null
+   */
+  public function parent()
+  {
+    return $this->parent;
   }
 
   /**
@@ -299,6 +298,7 @@ class SGML
    */
   public function setAttributes($attributes)
   {
+    if (count($attributes) > 0)
     foreach ($attributes as $name => $value) $this->setAttribute($name,$value);
     return $this;
   }
@@ -322,12 +322,12 @@ class SGML
   }
 
   /**
-   * Remove an attribute.
+   * Delete an attribute.
    *
    * @param string $name
    * @return object
    */
-  public function removeAttribute($name)
+  public function deleteAttribute($name)
   {
     // remove
     unset($this->attributes[$name]);
@@ -343,7 +343,7 @@ class SGML
    */
   public function comment($comment)
   {
-    $this->_attachNew('--',$comment);
+    new SGML($this,'--',$comment);
     // return for chaining
     return $this;
   }
@@ -365,16 +365,6 @@ class SGML
       // if the attribute is numeric it is a boolean attributes
       if (is_numeric($attribute))
       {
-if (is_array($value))
-{
-  echo '<pre>';
-  echo "PROBLEM?\n";
-  echo $attribute."\n";
-  print_r($value);
-  debug_print_backtrace();
-  echo '</pre>';
-  die('Bye...');
-}
         $text .= ' '.addslashes($value);
       }
       else $text .= ' '.(($value == '') ? $attribute : $attribute.'="'.addslashes($value).'"');
@@ -405,12 +395,12 @@ if (is_array($value))
     // this is the normal indent string for this element
     $indent = str_repeat('  ',$indentLevel);
     // do we minimize the inside of the element?
-    $innerMinimize = $this->minimize || $minimize;
+    $innerMinimize = $this->isVoid || $this->minimize || $minimize;
     // any element with a content should be concatenated
-    if ($this->_hasContent())
+    if ($this->hasContent())
     {
       // does it have an element name?
-      if ($this->_hasName())
+      if ($this->hasName())
       {
         // this could be a comment, otherwise it is a normal tag
         if ($this->name == '--') $sgml = $innerMinimize ? '' : '<!-- '.$this->content.' -->';
@@ -419,17 +409,17 @@ if (is_array($value))
       else $sgml = $this->content; // it's just a content
     }
     // otherwise it could have elements and we need to get those
-    elseif ($this->_hasElements())
+    elseif ($this->hasElements())
     {
       // start tag
-      $sgml = $this->_hasName() ? $this->_startTag().($innerMinimize ? '' : PHP_EOL) : '';
+      $sgml = $this->hasName() ? $this->_startTag().($innerMinimize ? '' : PHP_EOL) : '';
       // elements
       foreach ($this->elements as $element) $sgml .= $element->getMarkup($innerMinimize,$indentLevel+1);
       // end tag
       $sgml .= ($innerMinimize ? '' : $indent).$this->_endTag();
     }
     // no content and no elements, does it have at least a name?
-    elseif ($this->_hasName()) $sgml = $this->_startTag().$this->_endTag();
+    elseif ($this->hasName()) $sgml = $this->_startTag().$this->_endTag();
     // no content, no elements and no name
     else $sgml = '';
     // return sgml
@@ -447,8 +437,8 @@ if (is_array($value))
     // get the markup
     $markup = $this->getMarkup($minimize);
     // either echo markup or write it to file
-    if (is_null($handle)) echo $markup;
-                     else fwrite($handle,$markup);
+    if (is_null($handle)) return $markup;
+                     else return fwrite($handle,$markup);
     // the start was flushed
     $this->startFlushed = TRUE;
     // cleanup
