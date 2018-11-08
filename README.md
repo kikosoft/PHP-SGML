@@ -5,7 +5,7 @@ A simple PHP example would be:
 
 ```php
 // start a new sgml section
-$recipe = new SGML(NULL,'recipe',['language' => 'English']);
+$recipe = new SGML(NULL,'recipe',[['language' => 'English']]);
 
 // comment and title
 $recipe->comment('Taken from https://www.bbcgoodfood.com/recipes/pina-colada')
