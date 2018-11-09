@@ -1,4 +1,4 @@
-# SGML
+# PHP-SGML
 Generate valid SGML code with a simple PHP class. This class can be used to build a HTML or XML writer.
 
 A simple PHP example would be:
