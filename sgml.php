@@ -21,51 +21,40 @@
 class SGML
 {
   /** @var string $voidClosure Detemine how a void element is closed. */
-  private $voidClosure  = '';
+  private $voidClosure = '';
 
   /** @var bool $isVoid Whether this element is without a closing tag, like: <br>. */
-  private $isVoid       = FALSE;
+  private $isVoid = FALSE;
 
-  /** @var bool $minimize Whether the markup of this element will be minimized. */
-  private $minimize     = FALSE;
+  /** @var bool $humanReadable This code cannot be rendered minimized. */
+  private $humanReadable = FALSE;
 
-  /** @var bool $blocked Whether this element is locked so you cannot flush the end tag. */
-  private $blocked      = FALSE;
+  /** @var bool $locked Whether this element is locked so you cannot flush the end tag. */
+  private $locked = FALSE;
 
   /** @var bool $startFlushed Whether the start tag of this element was flushed. */
   private $startFlushed = FALSE;
 
+  /** @var bool $endFlushed Whether the end tag of this element was flushed. */
+  private $endFlushed = FALSE;
+
   /** @var object|null $parent Parent element of this element. */
-  private $parent       = NULL;
+  private $parent = NULL;
 
-  /**
-   * If absent only content is send to the output without a start or end tag.
-   *
-   * @var string $name The tag name of this element.
-   */
-  private $name         = '';
+  /** @var string $name The tag name of this element. */
+  private $name = '';
 
-  /**
-   * If present there are no child elements. As soon a child element is added
-   * the content has to be transformed into a child element as well.
-   *
-   * @var string $content The content of this element, apart from child elements.
-   */
-  private $content      = '';
+  /** @var string $content The content of this element, apart from child elements. */
+  private $content = '';
 
-  /**
-   * If present there is no content.
-   *
-   * @var array $elements The child elements of this element.
-   */
-  private $elements     = [];
+  /** @var array $elements The child elements of this element. */
+  private $elements = [];
 
-  /**
-   * The array keys are attribute names, and array values are attribute values.
-   *
-   * @var array $attributes Attributes of this element.
-   */
-  private $attributes   = [];
+  /** @var array $attributes Attributes of this element. */
+  private $attributes = [];
+
+  /** @var bool $flushingBlocked Flag to indicate that a lock was encountered. */
+  protected static $blocked = FALSE;
 
   /**
    * Split arguments into content and attributes.
@@ -128,39 +117,27 @@ class SGML
     $this->name       = $name;
     $this->content    = $content;
     $this->attributes = $attributes;
-    if (isset($parent))
-    {
-      // if content is present in the parent we should promote it to an
-      // element otherwise we will loose the order of content and elements
-      if ($parent->hasContent())
-      {
-        // create new element for the parent with that content
-        new SGML($parent,'',$parent->getContent());
-        // and clear the content of the parent
-        $parent->clearContent();
-      }
-      // attach this element to the parent
-      $parent->attach($this);
-    }
+    // attach this element to the parent
+    if (isset($parent)) $parent->attach($this);
   }
 
   /**
-   * Render the inside of this element minimized.
+   * Render the inside of this element in human readable format.
    *
    * @return object
    */
-  public function minimize()
+  public function humanReadable()
   {
-    $this->minimize = TRUE;
+    $this->humanReadable = TRUE;
     // return for chaining
     return $this;
   }
 
   /**
    * This is a void, or self closing, element.
-   * SGML doesn't really have void elements, but html and xml do.
+   * SGML doesn't really have void elements, but HTML and XML do.
    *
-   * @param string $closure Use either ' /' or '', the latter is the default.
+   * @param string $closure Use either ' /' for XML or '' for HTML (default).
    * @return object
    */
   public function void($closure = '')
@@ -172,47 +149,61 @@ class SGML
   }
 
   /**
-   * When blocked you cannot flush the end tag.
+   * This is not a void, or self closing, element.
+   * SGML doesn't really have void elements, but HTML and XML do.
    *
    * @return object
    */
-  public function block()
+  public function unvoid()
   {
-    $this->blocked = TRUE;
+    $this->isVoid = FALSE;
     // return for chaining
     return $this;
   }
 
   /**
-   * When blocked you cannot flush the end tag.
+   * When locked you cannot flush the end tag.
    *
    * @return object
    */
-  public function unblock()
+  public function lock()
   {
-    $this->blocked = FALSE;
+    $this->locked = TRUE;
     // return for chaining
     return $this;
   }
 
   /**
-   * Does this element have a name?
+   * When locked you cannot flush the end tag.
    *
-   * @return bool
+   * @return object
    */
-  public function hasName()
+  public function unlock()
   {
-    return ($this->name != '');
+    $this->locked = FALSE;
+    // return for chaining
+    return $this;
   }
 
   /**
-   * Does this element have content?
+   * Set the name of this element.
    *
-   * @return bool
+   * @return object
    */
-  public function hasContent()
+  public function setName($name)
   {
-    return ($this->content != '');
+    $this->name = $name;
+     return $this;
+  }
+
+  /**
+   * Read the content of this element.
+   *
+   * @return string
+   */
+  public function read()
+  {
+    return $this->content;
   }
 
   /**
@@ -225,10 +216,8 @@ class SGML
   {
     // if elements are present we should add the content as an new element
     if ($this->hasElements()) new SGML($this,'',$content);
-    // otherwise we can add it to the existing content
-    elseif ($this->hasContent()) $this->content .= $content;
-    // or make it the new content
-    else $this->content = $content;
+    // otherwise we can add it to the content
+    else $this->content .= $content;
     // return for chaining
     return $this;
   }
@@ -265,7 +254,7 @@ class SGML
    */
   public function __call($name,$arguments)
   {
-    // make new element
+    // make new sgml element
     return new SGML($this,$name,$arguments);
   }
 
@@ -277,6 +266,17 @@ class SGML
   public function parent()
   {
     return $this->parent;
+  }
+
+  /**
+   * Returns true, if attribute exists, otherwise returns false.
+   *
+   * @param string $name
+   * @return bool
+   */
+  public function hasAttribute($name)
+  {
+    return isset($this->attributes[$name]);
   }
 
   /**
@@ -298,13 +298,12 @@ class SGML
    */
   public function setAttributes($attributes)
   {
-    if (count($attributes) > 0)
-    foreach ($attributes as $name => $value) $this->setAttribute($name,$value);
+    $this->attributes += $attributes;
     return $this;
   }
 
   /**
-   * Set an attribute, overwrite it when it exists.
+   * Set an attribute, overwrite it when it exists or append.
    *
    * @param string $name
    * @param string $value
@@ -322,17 +321,38 @@ class SGML
   }
 
   /**
-   * Delete an attribute.
+   * removes a single attribute from the attribures array.
    *
-   * @param string $name
-   * @return object
+   * @param string $name Which attribute to remove.
+   * @return string|null
    */
-  public function deleteAttribute($name)
+  protected function removeAttribute($name)
   {
-    // remove
     unset($this->attributes[$name]);
-    // return for chaining
     return $this;
+  }
+
+  /**
+   * removes a single attribute from the attribures array and returns it.
+   *
+   * @param string $name Which attribute to extract.
+   * @param string|null $default Default value when absent.
+   * @param array|null $options Possible values. Leave empty for any value.
+   * @return string|null
+   */
+  protected function extractAttribute($name,$default = NULL,$options = NULL)
+  {
+    // begin value
+    $value = $default;
+    // get proposal, or not
+    if (isset($this->attributes[$name]))
+    {
+      $proposal = $this->attributes[$name];
+      if (is_array($options)) $value = in_array($proposal,$options) ? $proposal : $value;
+                         else $value = $proposal;
+      unset($this->attributes[$name]);
+    }
+    return $value;
   }
 
   /**
@@ -355,8 +375,6 @@ class SGML
    */
   private function _startTag()
   {
-    // no start when it has already been flushed
-    if ($this->startFlushed) return '';
     // first the name of this element
     $text = $this->name;
     // then the list of attributes
@@ -369,6 +387,8 @@ class SGML
       }
       else $text .= ' '.(($value == '') ? $attribute : $attribute.'="'.addslashes($value).'"');
     }
+    // the start was flushed
+    $this->startFlushed = TRUE;
     // and return it as a tag, also sets correct closure
     return '<'.$text.($this->isVoid ? $this->voidClosure : '').'>';
   }
@@ -380,7 +400,19 @@ class SGML
    */
   private function _endTag()
   {
-    return ($this->isVoid || $this->blocked) ? '' : '</'.$this->name.'>';
+    // delete content and child elements after flushing
+    $this->content  = '';
+    $this->elements = [];
+    // if this tag locked we set the blocked flag
+    if ($this->locked)
+    {
+      self::$blocked = TRUE;
+      return '';
+    }
+    // the end was flushed
+    $this->endFlushed = TRUE;
+    // return
+    return $this->isVoid ? '' : '</'.$this->name.'>';
   }
 
   /**
@@ -392,38 +424,60 @@ class SGML
    */
   public function getMarkup($minimize = TRUE,$indentLevel = 0)
   {
-    // this is the normal indent string for this element
-    $indent = str_repeat('  ',$indentLevel);
-    // do we minimize the inside of the element?
-    $innerMinimize = $this->isVoid || $this->minimize || $minimize;
-    // any element with a content should be concatenated
-    if ($this->hasContent())
+    // if it's only content we simple return it
+    if ($this->name == '') return $this->content;
+    // adjust minimizing to force human readability?
+    $minimize = $minimize && !$this->humanReadable;
+    // the normal indent string for this element
+    $indent = $minimize ? '' : str_repeat('  ',$indentLevel);
+    // the normal ending for this element
+    $eol = $minimize ? '' : PHP_EOL;
+    // any element with elements should not be concatenated
+    if ($this->hasElements())
     {
-      // does it have an element name?
-      if ($this->hasName())
+      // get start tag
+      $sgml = $this->startFlushed ? '' : $indent.$this->_startTag().$eol;
+      // increase indent level
+      if (!$minimize) $indentLevel++;
+      // get the elements
+      foreach ($this->elements as $element)
       {
-        // this could be a comment, otherwise it is a normal tag
-        if ($this->name == '--') $sgml = $innerMinimize ? '' : '<!-- '.$this->content.' -->';
-                            else $sgml = $this->_startTag().$this->content.$this->_endTag();
+        $sgml .= $element->getMarkup($minimize,$indentLevel);
+        // break on a block by a lock
+        if (self::$blocked) break;
       }
-      else $sgml = $this->content; // it's just a content
+      // get end tag, when not blocked
+      if (!($this->endFlushed || self::$blocked))
+      {
+        // and end tag can cause a blockage, so we do call it before...
+        $endTag = $this->_endTag();
+        // it is actually being rendered
+        if (!self::$blocked) $sgml .= $indent.$endTag.$eol;
+      }
     }
-    // otherwise it could have elements and we need to get those
-    elseif ($this->hasElements())
+    // any other element should be concatenated
+    else
     {
-      // start tag
-      $sgml = $this->hasName() ? $this->_startTag().($innerMinimize ? '' : PHP_EOL) : '';
-      // elements
-      foreach ($this->elements as $element) $sgml .= $element->getMarkup($innerMinimize,$indentLevel+1);
-      // end tag
-      $sgml .= ($innerMinimize ? '' : $indent).$this->_endTag();
+      // this could be a comment
+      if ($this->name == '--')
+      {
+        // no comments in minimized code
+        $sgml = $minimize ? '' : $indent.'<!-- '.$this->content.' -->'.PHP_EOL;
+      }
+      else
+      {
+        // a normal tag with no child elements
+        $sgml = $this->startFlushed ? '' : $indent.$this->_startTag().$this->content;
+        // end tag, when not already flushed
+        if (!$this->endFlushed)
+        {
+          $endTag = $this->_endTag();
+          $sgml  .= $endTag.($minimize || self::$blocked ? '' : PHP_EOL);
+        }
+      }
     }
-    // no content and no elements, does it have at least a name?
-    elseif ($this->hasName()) $sgml = $this->_startTag().$this->_endTag();
-    // no content, no elements and no name
-    else $sgml = '';
     // return sgml
-    return $minimize ? $sgml : $indent.$sgml.PHP_EOL;
+    return $sgml;
   }
 
   /**
@@ -434,13 +488,13 @@ class SGML
    */
   public function flush($minimize = TRUE,$handle = NULL)
   {
+    // we start not being blocked by a lock
+    self::$blocked = FALSE;
     // get the markup
     $markup = $this->getMarkup($minimize);
     // either echo markup or write it to file
     if (is_null($handle)) return $markup;
                      else return fwrite($handle,$markup);
-    // the start was flushed
-    $this->startFlushed = TRUE;
     // cleanup
     $this->content    = '';
     $this->elements   = [];
